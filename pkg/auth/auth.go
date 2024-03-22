@@ -1,212 +1,213 @@
-// auth implements simple authentication.
 package auth
 
 import (
 	"bytes"
-	"crypto/aes"
-	"crypto/cipher"
-	"crypto/hmac"
-	"crypto/rand"
-	"crypto/sha256"
+	"context"
+	"crypto/sha1"
 	"encoding/base64"
 	"encoding/gob"
-	"errors"
 	"fmt"
+	"html"
 	"io"
+	"net/http"
+	"os"
 	"time"
+
+	"github.com/charmbracelet/log"
+	"github.com/gorilla/sessions"
+	"golang.org/x/crypto/pbkdf2"
 )
 
+var (
+	store  *sessions.CookieStore
+	salt   []byte
+	prefix = os.Getenv("PATH_PREFIX")
+)
+
+const (
+	sessionName = "palace_auth"
+)
+
+func init() {
+	setupCookiesOrDie()
+	gob.Register(authToken{})
+	gob.Register(time.Time{})
+}
+
+// UsersDB is the API surface required to validate username+password pairs.
+// The passwords passed in will be SaltAndHash of the plaintext.
 type UsersDB interface {
-	ValidatePassword(user, password string) error
-}
-
-type Manager struct {
-	db      UsersDB
-	block   cipher.Block
-	signKey []byte
-	now     func() time.Time
-}
-
-func New(db UsersDB, encryptKey []byte, signKey []byte) (*Manager, error) {
-	block, err := aes.NewCipher(encryptKey)
-	if err != nil {
-		return nil, err
-	}
-	return &Manager{
-		db:      db,
-		block:   block,
-		signKey: signKey,
-		now:     time.Now,
-	}, nil
+	ValidatePassword(user string, password []byte) error
 }
 
 type authToken struct {
-	Username string
-	Password string
-	AuthedAt time.Time
+	Username          string
+	PasswordHash      []byte
+	CreationTimestamp time.Time
 }
 
-func init() {
-	gob.Register(time.Time{})
-	gob.Register(authToken{})
+func setupCookiesOrDie() {
+	salt = MustDecodeBase64([]byte(os.Getenv("AUTH_SALT")))
+	if len(salt) == 0 {
+		panic(fmt.Errorf("AUTH_SALT must be non-empty"))
+	}
+
+	blockKey := MustDecodeBase64([]byte(os.Getenv("AUTH_BLOCK_KEY")))
+	switch len(blockKey) {
+	case 16, 24, 32:
+		// OK.
+	default:
+		panic(fmt.Errorf("AUTH_BLOCK_KEY is invalid length %d", len(blockKey)))
+	}
+
+	hashKey := MustDecodeBase64([]byte(os.Getenv("AUTH_HASH_KEY")))
+	if len(hashKey) == 0 {
+		panic(fmt.Errorf("AUTH_HASH_KEY must be non-empty"))
+	}
+
+	store = sessions.NewCookieStore(hashKey, blockKey)
+	maxAge := 400 * 24 * 60 * 60 // 400 days.
+	store.Options = &sessions.Options{
+		Path:     prefix, // Potential bug.
+		MaxAge:   maxAge, // Does not take effect yet.
+		Secure:   true,
+		HttpOnly: false, // Allows JavaScript to read the cookie.
+	}
+	store.MaxAge(maxAge)
 }
 
-// Validate checks the authenticity of the token and verifies the user and
-// password is valid according to the database. The error is nil if the token is
-// valid.
-func (a *Manager) Validate(token []byte) error {
-	data, err := a.decryptToken(token)
+func checkAuth(db UsersDB, r *http.Request) error {
+	session, err := store.Get(r, sessionName)
 	if err != nil {
-		return fmt.Errorf("bad token: %w", err)
+		return err
+	}
+	token, ok := session.Values["token"].(authToken)
+	if !ok {
+		return fmt.Errorf("no authentication")
 	}
 
-	if err := a.db.ValidatePassword(data.Username, data.Password); err != nil {
-		return fmt.Errorf("encrypted and signed token does not match actual user: %w", err)
+	// Validate that the password provided is valid.
+	if err := db.ValidatePassword(token.Username, token.PasswordHash); err != nil {
+		return err
 	}
 
-	if a.now().Sub(data.AuthedAt) >= 30*24*time.Hour {
-		return fmt.Errorf("token is expired")
+	// Verify the timestamp is not too old.
+	if time.Now().Sub(token.CreationTimestamp) >= 30*24*time.Hour {
+		return fmt.Errorf("token created at %s is expired", token.CreationTimestamp)
 	}
 	return nil
 }
 
-func (a *Manager) decryptToken(raw []byte) (authToken, error) {
-	var token authToken
-	b64encrypted, b64signature, _ := bytes.Cut(raw, []byte{'|'})
-	encrypted, err := unbase64([]byte(b64encrypted))
+// OnlyAuthenticated decorates a handler to redirect to a login page if there is
+// no auth data.
+func OnlyAuthenticated(db UsersDB, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		rc := r.Clone(context.Background())
+		if err := checkAuth(db, r); err != nil {
+			noAuth(w, r, err)
+			return
+		}
+
+		// TODO: Will this work for the web extension?
+		// TODO: Refresh the token before calling the inner handler?
+
+		// Allow the request.
+		next.ServeHTTP(w, rc)
+	})
+}
+
+func noAuth(w http.ResponseWriter, r *http.Request, authErr error) {
+	log.Errorf("%s %s: failed to auth user: %v", r.Method, r.URL.Path, authErr)
+	session, err := store.Get(r, sessionName)
+	if err == nil {
+		session.AddFlash(fmt.Sprintf("Logged out: %v", authErr))
+		session.Values["redirect"] = r.URL.String()
+		session.Save(r, w)
+	} else {
+		log.Warnf("failed to create session: %v", err)
+	}
+	http.Redirect(w, r, prefix+"/login", http.StatusFound) // This is easily a bug, it needs to know its prefix.
+}
+
+// PostLogin creates a handler to receive login form results (checking the
+// form values "username" and "password") and grant the user an auth token.
+func PostLogin(db UsersDB) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		username := r.FormValue("username")
+		password := r.FormValue("password")
+		salted := SaltAndHash(password)
+		// TODO: Hash that password with salt.
+		if err := db.ValidatePassword(username, salted); err != nil {
+			noAuth(w, r, err)
+			return
+		}
+
+		session, err := store.Get(r, sessionName)
+		if err != nil {
+			log.Errorf("failed to create session: %v", err)
+			http.Error(w, fmt.Sprintf("Error: failed to create session: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		// User is authenticated, set up a token.
+		session.Values["token"] = authToken{
+			Username:          username,
+			PasswordHash:      salted,
+			CreationTimestamp: time.Now(),
+		}
+		if err := session.Save(r, w); err != nil {
+			log.Errorf("User logged in but we failed to save their session: %v", err)
+		}
+
+		redirect := prefix // Prefix bug!!!
+		if sessionRedirect, ok := session.Values["redirect"]; ok {
+			redirect = sessionRedirect.(string)
+		}
+		http.Redirect(w, r, redirect, http.StatusFound) // Again, prefix bug.
+	})
+}
+
+// GetLogin serves an HTTP login page.
+func GetLogin(w http.ResponseWriter, r *http.Request) {
+	var flashtext []string
+	session, err := store.Get(r, sessionName)
+	if err == nil {
+		flashes := session.Flashes()
+		log.Infof("flashes: %v", flashes)
+		for _, f := range flashes {
+			flashtext = append(flashtext, fmt.Sprintf("%s", f))
+		}
+		session.Save(r, w) // Clears the flashes.
+	} else {
+		log.Warnf("no session on login page: %v", err)
+	}
+
+	fmt.Fprintf(w, `<body>`)
+	for _, f := range flashtext {
+		fmt.Fprintf(w, `<p>%s</p>`, html.EscapeString(f))
+	}
+	fmt.Fprintf(w, `
+	<form method="post">
+	<input type="text" placeholder="username" name="username" required>
+	<input type="text" placeholder="password" name="password" required>
+	<button type="submit">Login</button>
+	</form>
+</body>
+	`)
+}
+
+// SaltAndHash hashes the password with a salt and dervies a key from it.
+func SaltAndHash(password string) []byte {
+	return pbkdf2.Key([]byte(password), salt, 4096, 32, sha1.New)
+}
+
+// MustDecodeBase64 decodes the URL-encoded base 64 or panics.
+func MustDecodeBase64(in []byte) []byte {
+	b := bytes.NewBuffer(in)
+	dec := base64.NewDecoder(base64.URLEncoding, b)
+	output, err := io.ReadAll(dec)
 	if err != nil {
-		return token, err
+		panic(err)
 	}
-	signature, err := unbase64([]byte(b64signature))
-	if err != nil {
-		return token, err
-	}
-
-	h := hmac.New(sha256.New, a.signKey)
-	h.Write(encrypted)
-	actualSignature := h.Sum(nil)
-	if !hmac.Equal(signature, actualSignature) {
-		return token, fmt.Errorf("invalid signature")
-	}
-
-	decrypted, err := decrypt(a.block, encrypted)
-	if err != nil {
-		return token, fmt.Errorf("invalid encrypted data")
-	}
-
-	buf := bytes.NewBuffer(decrypted)
-	if err := gob.NewDecoder(buf).Decode(&token); err != nil {
-		return token, fmt.Errorf("failed to decode data: %w", err)
-	}
-	return token, nil
-}
-
-// RefreshToken validates and generates the token with a fresh timestamp.
-func (a *Manager) RefreshToken(token []byte) ([]byte, error) {
-	if err := a.Validate(token); err != nil {
-		return nil, fmt.Errorf("cannot refresh invalid auth: %w", err)
-	}
-	data, err := a.decryptToken(token)
-	if err != nil {
-		return nil, err
-	}
-	return a.Token(data.Username, data.Password)
-}
-
-// Token generates a token for the username password pair, if it is valid in the
-// database.
-func (a *Manager) Token(user, password string) ([]byte, error) {
-	if err := a.db.ValidatePassword(user, password); err != nil {
-		return nil, fmt.Errorf("username does not match password: %w", err)
-	}
-
-	// Gob encode the data into buf.
-	data := authToken{
-		Username: user,
-		Password: password,
-		AuthedAt: a.now(),
-	}
-	var buf bytes.Buffer
-	if err := gob.NewEncoder(&buf).Encode(data); err != nil {
-		return nil, fmt.Errorf("failed to encode auth data: %w", err)
-	}
-
-	// Encrypt the buf.
-	encrypted, err := encrypt(a.block, buf.Bytes())
-	if err != nil {
-		return nil, fmt.Errorf("failed to encrypt auth data: %w", err)
-	}
-
-	// Generate a signature.
-	h := hmac.New(sha256.New, a.signKey)
-	h.Write(encrypted)
-	signature := h.Sum(nil)
-
-	// Reset the buf and write b64(encrypted)+"|"+b64(signature) as the result.
-	// Errors are elided here, if this fails it creates an invalid auth.
-	buf.Reset()
-	buf.Write(tobase64(encrypted))
-	buf.Write([]byte{'|'})
-	buf.Write(tobase64(signature))
-	return buf.Bytes(), nil
-}
-
-// encrypt encrypts a value using the given block in counter mode.
-//
-// A random initialization vector ( https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Initialization_vector_(IV) ) with the length of the
-// block size is prepended to the resulting ciphertext.
-func encrypt(block cipher.Block, value []byte) ([]byte, error) {
-	iv := generateRandomKey(block.BlockSize())
-	if iv == nil {
-		return nil, errors.New("failed to generate IV")
-	}
-	// Encrypt it.
-	stream := cipher.NewCTR(block, iv)
-	stream.XORKeyStream(value, value)
-	// Return iv + ciphertext.
-	return append(iv, value...), nil
-}
-
-// decrypt decrypts a value using the given block in counter mode.
-//
-// The value to be decrypted must be prepended by a initialization vector
-// ( https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation#Initialization_vector_(IV) ) with the length of the block size.
-func decrypt(block cipher.Block, value []byte) ([]byte, error) {
-	size := block.BlockSize()
-	if len(value) > size {
-		// Extract iv.
-		iv := value[:size]
-		// Extract ciphertext.
-		value = value[size:]
-		// Decrypt it.
-		stream := cipher.NewCTR(block, iv)
-		stream.XORKeyStream(value, value)
-		return value, nil
-	}
-	return nil, errors.New("decryption failed")
-}
-
-// tobase64 encodes data to base64 with URL encoding.
-func tobase64(value []byte) []byte {
-	encoded := make([]byte, base64.URLEncoding.EncodedLen(len(value)))
-	base64.URLEncoding.Encode(encoded, value)
-	return encoded
-}
-
-// unbase64 is the reverse of tobase64.
-func unbase64(value []byte) ([]byte, error) {
-	decoded := make([]byte, base64.URLEncoding.DecodedLen(len(value)))
-	b, err := base64.URLEncoding.Decode(decoded, value)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode base64: %w", err)
-	}
-	return decoded[:b], nil
-}
-
-func generateRandomKey(length int) []byte {
-	k := make([]byte, length)
-	if _, err := io.ReadFull(rand.Reader, k); err != nil {
-		return nil
-	}
-	return k
+	return output
 }
