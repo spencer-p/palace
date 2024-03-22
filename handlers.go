@@ -50,7 +50,7 @@ func search(w http.ResponseWriter, r *http.Request) {
 	query := r.FormValue("q")
 	if query == "" {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		w.Write([]byte("ok - no query"))
 		return
 	}
 
