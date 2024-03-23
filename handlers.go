@@ -54,6 +54,9 @@ func scrapePage(w http.ResponseWriter, r *http.Request) {
 		Scheme: location.Scheme,
 		Host:   location.Host,
 		Path:   location.Path,
+		// Some websites use the query to distinguish pages.
+		// E.g. Hacker News uses /items?id=X for posts.
+		RawQuery: location.RawQuery,
 	}
 
 	col := DataColumn{

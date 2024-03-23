@@ -1,8 +1,16 @@
+const banlist = [
+	"https://icebox.spencerjp.dev/palace.*",
+	"https://(www.)?google.com.*",
+	"https://(www.)?youtube.com.*"
+];
+
+const regexBanlist = new RegExp("("+banlist.join("|")+")");
 
 async function uploadContent() {
 	const opts = await chrome.storage.local.get("palace");
-	if (window.location.toString().startsWith("https://icebox.spencerjp.dev/")) {
-		console.log("palace: short-circuit, will not scrape self");
+	const url = document.URL;
+	if (regexBanlist.test(url)) {
+		console.log("palace: will not scraped banned url:", url);
 		return;
 	}
 	fetch("https://icebox.spencerjp.dev/palace/pages", {
@@ -12,7 +20,7 @@ async function uploadContent() {
 			"Content-Type": "application/json",
 		},
 		body: JSON.stringify({
-			"url": window.location.toString(),
+			"url": url,
 			"title": document.title,
 			"text": document.querySelector("body").innerText,
 			"token": opts.palace.token,
