@@ -52,7 +52,7 @@ func scrapePage(w http.ResponseWriter, r *http.Request) {
 	col := DataColumn{
 		ScrapedAt:   time.Now(),
 		URL:         minLocation.String(),
-		SafeTitle:   html.EscapeString(content.TextContent),
+		SafeTitle:   html.EscapeString(content.Title),
 		SafeContent: html.EscapeString(content.TextContent),
 	}
 
