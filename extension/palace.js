@@ -1,6 +1,10 @@
 
 async function uploadContent() {
 	const opts = await chrome.storage.local.get("palace");
+	if (window.location.toString().startsWith("https://icebox.spencerjp.dev/")) {
+		console.log("palace: short-circuit, will not scrape self");
+		return;
+	}
 	fetch("https://icebox.spencerjp.dev/palace/pages", {
 		method: "POST",
 		mode: "no-cors",
@@ -9,7 +13,7 @@ async function uploadContent() {
 		},
 		body: JSON.stringify({
 			"url": window.location.toString(),
-			"title": document.querySelector("title").innerText,
+			"title": document.title,
 			"text": document.querySelector("body").innerText,
 			"token": opts.palace.token,
 		}),
