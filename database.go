@@ -35,16 +35,16 @@ type DB struct {
 //go:embed init_db.sql
 var initDB string
 
-func NewDB() (DB, error) {
-	db, err := sql.Open("sqlite", "./db.sqlite")
+func NewDB(filename string) (DB, error) {
+	db, err := sql.Open("sqlite", filename)
 	if err != nil {
-		return DB{}, err
+		return DB{}, fmt.Errorf("failed to open %q: %v", filename, err)
 	}
 
 	_, err = db.Exec(initDB)
 	if err != nil {
 		db.Close()
-		return DB{}, err
+		return DB{}, fmt.Errorf("failed to run database init script: %v", err)
 	}
 
 	return DB{db}, nil

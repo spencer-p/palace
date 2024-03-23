@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"log"
 	"net/http"
+	"net/url"
 	"time"
+
+	"github.com/charmbracelet/log"
 )
 
 type PostPageRequest struct {
@@ -29,9 +31,17 @@ func scrapePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	url, err := url.Parse(content.URL)
+	if err != nil {
+		http.Error(w, "Bad URL", http.StatusBadRequest)
+		log.Printf("POST /pages: Bad URL %q", content.URL)
+		return
+	}
+	url.Fragment = ""
+
 	col := DataColumn{
 		ScrapedAt:   time.Now(),
-		URL:         content.URL,
+		URL:         url.String(),
 		SafeTitle:   html.EscapeString(content.TextContent),
 		SafeContent: html.EscapeString(content.TextContent),
 	}
@@ -42,6 +52,10 @@ func scrapePage(w http.ResponseWriter, r *http.Request) {
 		log.Printf("POST /pages: Failed to save in DB: %v", err)
 		return
 	}
+
+	log.Infof("Scraped %d: %s", id, col.URL)
+
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprintf(w, `{"id":%d}`, id) // Now that's fast JSON.
 }

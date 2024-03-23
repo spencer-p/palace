@@ -1,20 +1,18 @@
 {
-  "manifest_version": 2,
   "name": "Palace",
   "version": "0.1",
-
+  "manifest_version": 3,
   "description": "TODO",
-
-  "icons": {
-  },
-
-  "content_security_policy": "default-src 'https://icebox.spencerjp.dev/*'",
-
+  "host_permissions": ["*://icebox.spencerjp.dev/"],
+  "permissions": ["cookies", "storage"],
   "content_scripts": [
     {
       "matches": ["https://*/*", "http://*/*"],
       "js": ["palace.js"]
     }
-  ]
+  ],
+  "action": {
+	  "default_popup": "pop.html"
+  }
 }
 

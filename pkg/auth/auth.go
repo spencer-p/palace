@@ -6,14 +6,18 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"html"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/charmbracelet/log"
+	"github.com/gorilla/securecookie"
 	"github.com/gorilla/sessions"
 	"golang.org/x/crypto/pbkdf2"
 )
@@ -76,16 +80,7 @@ func setupCookiesOrDie() {
 	store.MaxAge(maxAge)
 }
 
-func checkAuth(db UsersDB, r *http.Request) error {
-	session, err := store.Get(r, sessionName)
-	if err != nil {
-		return err
-	}
-	token, ok := session.Values["token"].(authToken)
-	if !ok {
-		return fmt.Errorf("no authentication")
-	}
-
+func checkToken(db UsersDB, token authToken) error {
 	// Validate that the password provided is valid.
 	if err := db.ValidatePassword(token.Username, token.PasswordHash); err != nil {
 		return err
@@ -98,21 +93,71 @@ func checkAuth(db UsersDB, r *http.Request) error {
 	return nil
 }
 
+func checkAuth(db UsersDB, r *http.Request) error {
+	session, err := store.Get(r, sessionName)
+	if err != nil {
+		return err
+	}
+	token, ok := session.Values["token"].(authToken)
+	if !ok {
+		return fmt.Errorf("no authentication")
+	}
+	return checkToken(db, token)
+}
+
+type jsonToken struct {
+	Token string `json:"token"`
+}
+
+func checkAuthJSON(db UsersDB, r *http.Request) error {
+	var packet jsonToken
+	if err := json.NewDecoder(r.Body).Decode(&packet); err != nil {
+		return fmt.Errorf("no JSON token: %v", err)
+	}
+
+	values := make(map[any]any)
+	err := securecookie.DecodeMulti(sessionName, packet.Token, &values, store.Codecs...)
+	if err != nil {
+		return fmt.Errorf("failed to decode json token: %v", err)
+	}
+
+	token, ok := values["token"].(authToken)
+	if !ok {
+		return fmt.Errorf("no authentication")
+	}
+	return checkToken(db, token)
+}
+
 // OnlyAuthenticated decorates a handler to redirect to a login page if there is
 // no auth data.
 func OnlyAuthenticated(db UsersDB, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// rc is used for auth, the original request will be given to the inner
+		// handler.
 		rc := r.Clone(context.Background())
-		if err := checkAuth(db, r); err != nil {
-			noAuth(w, r, err)
-			return
+		if err := checkAuth(db, rc); err != nil {
+
+			// We'll try finding a JSON token, so we need a seperate copy of the
+			// body for the inner handler.
+			body, err := io.ReadAll(r.Body)
+			if err != nil {
+				noAuth(w, rc, err)
+				return
+			}
+			rc.Body = io.NopCloser(bytes.NewBuffer(body))
+			r.Body = io.NopCloser(bytes.NewBuffer(slices.Clone(body)))
+
+			if jsonErr := checkAuthJSON(db, rc); jsonErr != nil {
+				log.Infof("No JSON auth: %v", jsonErr)
+				noAuth(w, rc, err)
+				return
+			}
 		}
 
-		// TODO: Will this work for the web extension?
 		// TODO: Refresh the token before calling the inner handler?
 
 		// Allow the request.
-		next.ServeHTTP(w, rc)
+		next.ServeHTTP(w, r)
 	})
 }
 
@@ -121,12 +166,12 @@ func noAuth(w http.ResponseWriter, r *http.Request, authErr error) {
 	session, err := store.Get(r, sessionName)
 	if err == nil {
 		session.AddFlash(fmt.Sprintf("Logged out: %v", authErr))
-		session.Values["redirect"] = r.URL.String()
+		session.Values["redirect"] = filepath.Join(prefix, r.URL.Path)
 		session.Save(r, w)
 	} else {
 		log.Warnf("failed to create session: %v", err)
 	}
-	http.Redirect(w, r, prefix+"/login", http.StatusFound) // This is easily a bug, it needs to know its prefix.
+	http.Redirect(w, r, filepath.Join(prefix, "/login"), http.StatusFound) // This is easily a bug, it needs to know its prefix.
 }
 
 // PostLogin creates a handler to receive login form results (checking the
@@ -189,7 +234,7 @@ func GetLogin(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `
 	<form method="post">
 	<input type="text" placeholder="username" name="username" required>
-	<input type="text" placeholder="password" name="password" required>
+	<input type="password" placeholder="password" name="password" required>
 	<button type="submit">Login</button>
 	</form>
 </body>

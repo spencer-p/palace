@@ -1,7 +1,6 @@
-console.log("hello from palace.js");
 
-function uploadContent() {
-	console.log("Uploading content")
+async function uploadContent() {
+	const opts = await chrome.storage.local.get("palace");
 	fetch("https://icebox.spencerjp.dev/palace/pages", {
 		method: "POST",
 		mode: "no-cors",
@@ -12,16 +11,18 @@ function uploadContent() {
 			"url": window.location.toString(),
 			"title": document.querySelector("title").innerText,
 			"text": document.querySelector("body").innerText,
+			"token": opts.palace.token,
 		}),
 	})
-		.then((response) => console.log(response))
-		.catch((err) => console.error("error:", err));
+		.then((response) => response.text())
+		.then((data) => console.log("palace response:", data))
+		.catch((err) => console.error("palace error:", err));
 }
 
-if (document.readyState === "loading") {
-  // Loading hasn't finished yet.
-  document.addEventListener("DOMContentLoaded", uploadContent);
-} else {
+if (!(document.readyState === "loading")) {
   // `DOMContentLoaded` has already fired.
   uploadContent();
 }
+
+// Set a listener anyways for fancy pages.
+document.addEventListener("DOMContentLoaded", uploadContent);

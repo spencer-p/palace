@@ -1,3 +1,5 @@
 db.sqlite
 palace
 env.secret
+tmp
+secrets
