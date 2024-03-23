@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/charmbracelet/log"
 	_ "modernc.org/sqlite"
 )
 
@@ -62,7 +63,30 @@ func (db *DB) Save(col DataColumn) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+
+	go func() {
+		err := db.Evict(col.URL)
+		if err != nil {
+			log.Warnf("failed to evict old entries for %q: %v", col.URL, err)
+		}
+	}()
+
 	return res.LastInsertId()
+}
+
+func (db *DB) Evict(url string) error {
+	rows, err := db.Query(`SELECT id FROM web_data WHERE url = ? ORDER BY id ASC LIMIT 5`, url)
+	if err != nil {
+		return err
+	}
+	var id int64
+	if err := rows.Scan(&id); err != nil {
+		return err
+	}
+	if _, err := db.Exec(`DELETE FROM web_data WHERE id < ?`, id); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (db *DB) Search(query string) ([]SearchResult, error) {
