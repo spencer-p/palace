@@ -64,29 +64,52 @@ func (db *DB) Save(col DataColumn) (int64, error) {
 		return 0, err
 	}
 
-	go func() {
-		err := db.Evict(col.URL)
-		if err != nil {
-			log.Warnf("failed to evict old entries for %q: %v", col.URL, err)
-		}
-	}()
+	err = db.Evict(col.URL)
+	if err != nil {
+		log.Warnf("failed to evict old entries for %q: %v", col.URL, err)
+	}
 
 	return res.LastInsertId()
 }
 
-func (db *DB) Evict(url string) error {
-	rows, err := db.Query(`SELECT id FROM web_data WHERE url = ? ORDER BY id ASC LIMIT 5`, url)
-	if err != nil {
-		return err
-	}
+func (db *DB) evictID(url string) (int64, bool, error) {
 	var id int64
-	if err := rows.Scan(&id); err != nil {
+	rows, err := db.Query(`SELECT id FROM web_data WHERE url = ? ORDER BY id DESC LIMIT 5`, url)
+	if err != nil {
+		return id, false, fmt.Errorf("failed to query old ids: %v", err)
+	}
+	defer rows.Close()
+
+	total := 0
+	for rows.Next() {
+		if err := rows.Scan(&id); err != nil {
+			return id, false, fmt.Errorf("failed to scan col: %v", err)
+		}
+		total++
+	}
+	if total < 5 {
+		return id, false, nil
+	}
+
+	return id, true, nil
+}
+
+func (db *DB) Evict(url string) error {
+	id, ok, err := db.evictID(url)
+	if err != nil || !ok {
 		return err
 	}
-	if _, err := db.Exec(`DELETE FROM web_data WHERE id < ?`, id); err != nil {
-		return err
+
+	log.Infof("Dropping %q items below id %d", url, id)
+
+	for i := 0; i < 5; i++ {
+		if _, err = db.Exec(`DELETE FROM web_data WHERE id < ?`, id); err == nil {
+			return nil
+		}
+		log.Warnf("eviction for %q failed, will retry: %v", url, err)
+		time.Sleep(time.Duration(i) * 5 * time.Millisecond)
 	}
-	return nil
+	return fmt.Errorf("failed to delete: %v", err)
 }
 
 func (db *DB) Search(query string) ([]SearchResult, error) {
