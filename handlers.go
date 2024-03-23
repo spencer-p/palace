@@ -1,15 +1,20 @@
 package main
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"html"
 	"net/http"
 	"net/url"
+	"text/template"
 	"time"
 
 	"github.com/charmbracelet/log"
 )
+
+//go:embed static
+var staticContent embed.FS
 
 type PostPageRequest struct {
 	URL         string `json:"url"`
@@ -65,23 +70,27 @@ func scrapePage(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `{"id":%d}`, id) // Now that's fast JSON.
 }
 
-func search(w http.ResponseWriter, r *http.Request) {
-	query := r.FormValue("q")
-	if query == "" {
+func makeSearch() func(w http.ResponseWriter, r *http.Request) {
+	searchTemplate := template.Must(template.ParseFS(staticContent, "static/search.template.html"))
+	return func(w http.ResponseWriter, r *http.Request) {
+		query := r.FormValue("q")
+
+		var results []SearchResult
+		if query != "" {
+			var err error
+			results, err = db.Search(query)
+			if err != nil {
+				http.Error(w, "Failed to query database", http.StatusInternalServerError)
+				log.Infof("search: failed to query for %q: %v", query, err)
+				return
+			}
+		}
+
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok - no query"))
-		return
-	}
-
-	results, err := db.Search(query)
-	if err != nil {
-		http.Error(w, "Failed to query database", http.StatusInternalServerError)
-		log.Infof("search: failed to query for %q: %v", query, err)
-		return
-	}
-
-	w.WriteHeader(http.StatusOK)
-	for _, r := range results {
-		fmt.Fprintf(w, "%+v\n", r)
+		searchTemplate.Execute(w, map[string]any{
+			"Query":      query,
+			"NumResults": len(results),
+			"Results":    results,
+		})
 	}
 }

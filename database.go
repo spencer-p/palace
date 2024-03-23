@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"html/template"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -20,7 +21,7 @@ type DataColumn struct {
 type SearchResult struct {
 	DataColumn
 	ID        int
-	SafeBlurb string
+	SafeBlurb template.HTML
 }
 
 type Database interface {
