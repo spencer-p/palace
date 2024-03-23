@@ -120,7 +120,8 @@ func (db *DB) Search(query string) ([]SearchResult, error) {
 		snippet(search_index, 0, '<b>', '</b>', '...', 16)
 	FROM web_data
 	INNER JOIN search_index ON web_data.id = search_index.rowid
-	WHERE search_index MATCH ?`,
+	WHERE search_index MATCH ?
+	ORDER BY rank`,
 		query,
 	)
 	if err != nil {
