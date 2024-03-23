@@ -3,12 +3,16 @@ package main
 import (
 	"database/sql"
 	_ "embed"
+	"errors"
 	"fmt"
 	"html/template"
 	"time"
 
 	"github.com/charmbracelet/log"
+	"github.com/spencer-p/palace/pkg/backoff"
+	"modernc.org/sqlite"
 	_ "modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 type DataColumn struct {
@@ -54,18 +58,27 @@ func NewDB(filename string) (DB, error) {
 
 const ISO8601 = "2006-01-02 15:04:05.000"
 
+func retryBusy(err error) bool {
+	sqliteErr := &sqlite.Error{}
+	return errors.As(err, &sqliteErr) && sqliteErr.Code() == sqlite3.SQLITE_BUSY
+}
+
 func (db *DB) Save(col DataColumn) (int64, error) {
-	res, err := db.Exec(`INSERT INTO web_data(url, scraped_at, title, content) VALUES (?, ?, ?, ?) RETURNING id`,
-		col.URL,
-		col.ScrapedAt.Format(ISO8601),
-		col.SafeTitle,
-		col.SafeContent,
-	)
-	if err != nil {
+	var res sql.Result
+	if err := backoff.Retry(5, retryBusy, func() error {
+		var err error
+		res, err = db.Exec(`INSERT INTO web_data(url, scraped_at, title, content) VALUES (?, ?, ?, ?) RETURNING id`,
+			col.URL,
+			col.ScrapedAt.Format(ISO8601),
+			col.SafeTitle,
+			col.SafeContent,
+		)
+		return err
+	}); err != nil {
 		return 0, err
 	}
 
-	err = db.Evict(col.URL)
+	err := db.Evict(col.URL)
 	if err != nil {
 		log.Warnf("failed to evict old entries for %q: %v", col.URL, err)
 	}
@@ -103,14 +116,13 @@ func (db *DB) Evict(url string) error {
 
 	log.Infof("Dropping %q items below id %d", url, id)
 
-	for i := 0; i < 5; i++ {
-		if _, err = db.Exec(`DELETE FROM web_data WHERE id < ?`, id); err == nil {
-			return nil
-		}
-		log.Warnf("eviction for %q failed, will retry: %v", url, err)
-		time.Sleep(time.Duration(i) * 5 * time.Millisecond)
+	if err := backoff.Retry(5, retryBusy, func() error {
+		_, err = db.Exec(`DELETE FROM web_data WHERE id < ?`, id)
+		return err
+	}); err != nil {
+		return fmt.Errorf("failed to delete: %v", err)
 	}
-	return fmt.Errorf("failed to delete: %v", err)
+	return nil
 }
 
 func (db *DB) Search(query string) ([]SearchResult, error) {

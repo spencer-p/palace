@@ -69,7 +69,7 @@ func scrapePage(w http.ResponseWriter, r *http.Request) {
 	id, err := db.Save(col)
 	if err != nil {
 		http.Error(w, "Failed to commit data", http.StatusInternalServerError)
-		log.Infof("POST /pages: Failed to save in DB: %v", err)
+		log.Infof("POST /pages: Failed to %q save in DB: %v", col.URL, err)
 		return
 	}
 
