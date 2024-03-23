@@ -117,7 +117,7 @@ func (db *DB) Search(query string) ([]SearchResult, error) {
 	rows, err := db.Query(`
 	SELECT
 		id, url, scraped_at, search_index.title, search_index.content,
-		snippet(search_index, 0, '<b>', '</b>', '...', 16)
+		snippet(search_index, 0, '<b>', '</b>', '...', 64)
 	FROM web_data
 	INNER JOIN search_index ON web_data.id = search_index.rowid
 	WHERE search_index MATCH ?
