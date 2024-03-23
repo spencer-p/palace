@@ -27,21 +27,26 @@ func scrapePage(w http.ResponseWriter, r *http.Request) {
 	}
 	if content.URL == "" || content.Title == "" || content.TextContent == "" {
 		http.Error(w, "Incomplete request", http.StatusBadRequest)
-		log.Printf("POST /pages: Incomplete request")
+		log.Printf("POST /pages: Incomplete request. URL=%t, title=%t, content=%t",
+			content.URL == "", content.Title == "", content.TextContent == "")
 		return
 	}
 
-	url, err := url.Parse(content.URL)
+	location, err := url.Parse(content.URL)
 	if err != nil {
 		http.Error(w, "Bad URL", http.StatusBadRequest)
 		log.Printf("POST /pages: Bad URL %q", content.URL)
 		return
 	}
-	url.Fragment = ""
+	minLocation := url.URL{
+		Scheme: location.Scheme,
+		Host:   location.Host,
+		Path:   location.Path,
+	}
 
 	col := DataColumn{
 		ScrapedAt:   time.Now(),
-		URL:         url.String(),
+		URL:         minLocation.String(),
 		SafeTitle:   html.EscapeString(content.TextContent),
 		SafeContent: html.EscapeString(content.TextContent),
 	}
