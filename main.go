@@ -29,6 +29,7 @@ func main() {
 	http.Handle("/{$}", http.RedirectHandler(filepath.Join(os.Getenv("PATH_PREFIX"), "/search"), http.StatusFound))
 	authhandle("/search", makeSearch())
 
+	http.HandleFunc("OPTIONS /pages", scrapePageOptions)
 	authhandle("POST /pages", scrapePage)
 	authhandle("GET /pages/{id}", notImpl)
 	authhandle("DELETE /pages/{id}", notImpl)

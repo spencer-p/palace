@@ -22,6 +22,13 @@ type PostPageRequest struct {
 	TextContent string `json:"text"`
 }
 
+// See https://web.dev/articles/cross-origin-resource-sharing?utm_source=devtools#preflight-requests.
+func scrapePageOptions(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", "https://icebox.spencerjp.dev")
+	w.Header().Set("Access-Control-Allow-Methods", "POST")
+	w.WriteHeader(http.StatusOK)
+}
+
 func scrapePage(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 	var content PostPageRequest
