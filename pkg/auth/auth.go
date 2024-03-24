@@ -135,13 +135,13 @@ func OnlyAuthenticated(db UsersDB, next http.Handler) http.Handler {
 		// rc is used for auth, the original request will be given to the inner
 		// handler.
 		rc := r.Clone(context.Background())
-		if err := checkAuth(db, rc); err != nil {
+		if authErr := checkAuth(db, rc); authErr != nil {
 
 			// We'll try finding a JSON token, so we need a seperate copy of the
 			// body for the inner handler.
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
-				noAuth(w, rc, err)
+				noAuth(w, rc, authErr)
 				return
 			}
 			rc.Body = io.NopCloser(bytes.NewBuffer(body))
@@ -149,7 +149,7 @@ func OnlyAuthenticated(db UsersDB, next http.Handler) http.Handler {
 
 			if jsonErr := checkAuthJSON(db, rc); jsonErr != nil {
 				log.Infof("No JSON auth: %v", jsonErr)
-				noAuth(w, rc, err)
+				noAuth(w, rc, authErr)
 				return
 			}
 		}
@@ -166,7 +166,7 @@ func noAuth(w http.ResponseWriter, r *http.Request, authErr error) {
 	session, err := store.Get(r, sessionName)
 	if err == nil {
 		session.AddFlash(fmt.Sprintf("Logged out: %v", authErr))
-		session.Values["redirect"] = filepath.Join(prefix, r.URL.Path)
+		session.Values["redirect"] = filepath.Join(prefix, r.URL.String())
 		session.Save(r, w)
 	} else {
 		log.Warnf("failed to create session: %v", err)
@@ -217,9 +217,7 @@ func GetLogin(w http.ResponseWriter, r *http.Request) {
 	var flashtext []string
 	session, err := store.Get(r, sessionName)
 	if err == nil {
-		flashes := session.Flashes()
-		log.Infof("flashes: %v", flashes)
-		for _, f := range flashes {
+		for _, f := range session.Flashes() {
 			flashtext = append(flashtext, fmt.Sprintf("%s", f))
 		}
 		session.Save(r, w) // Clears the flashes.
