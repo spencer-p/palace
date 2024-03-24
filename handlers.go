@@ -7,6 +7,9 @@ import (
 	"html"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strconv"
 	"text/template"
 	"time"
 
@@ -15,6 +18,7 @@ import (
 
 //go:embed static
 var staticContent embed.FS
+var prefix = os.Getenv("PATH_PREFIX")
 
 type PostPageRequest struct {
 	URL         string `json:"url"`
@@ -84,11 +88,15 @@ func makeSearch() func(w http.ResponseWriter, r *http.Request) {
 	searchTemplate := template.Must(template.ParseFS(staticContent, "static/search.template.html"))
 	return func(w http.ResponseWriter, r *http.Request) {
 		query := r.FormValue("q")
+		page := 0
+		if parsed, err := strconv.Atoi(r.FormValue("page")); err == nil {
+			page = parsed
+		}
 
 		var results []SearchResult
 		if query != "" {
 			var err error
-			results, err = db.Search(query)
+			results, err = db.Search(query, page)
 			if err != nil {
 				http.Error(w, "Failed to query database", http.StatusInternalServerError)
 				log.Infof("search: failed to query for %q: %v", query, err)
@@ -98,9 +106,30 @@ func makeSearch() func(w http.ResponseWriter, r *http.Request) {
 
 		w.WriteHeader(http.StatusOK)
 		searchTemplate.Execute(w, map[string]any{
+			"PageNum":    page,
+			"NextPage":   withPage(prefix, r.URL, +1),
+			"PrevPage":   withPage(prefix, r.URL, -1),
 			"Query":      query,
 			"NumResults": len(results),
 			"Results":    results,
 		})
 	}
+}
+
+func withPage(prefix string, in *url.URL, diff int) string {
+	u := &url.URL{}
+	*u = *in
+	vals := u.Query()
+	page := 0
+	if parsed, err := strconv.Atoi(vals.Get("page")); err == nil {
+		page = parsed
+	}
+	page += diff
+	if page < 0 {
+		return ""
+	}
+	vals.Set("page", fmt.Sprintf("%d", page))
+	u.RawQuery = vals.Encode()
+	u.Path = filepath.Join(prefix, u.Path)
+	return u.String()
 }

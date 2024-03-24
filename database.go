@@ -125,7 +125,7 @@ func (db *DB) Evict(url string) error {
 	return nil
 }
 
-func (db *DB) Search(query string) ([]SearchResult, error) {
+func (db *DB) Search(query string, page int) ([]SearchResult, error) {
 	rows, err := db.Query(`
 	SELECT
 		id, url, scraped_at, search_index.title, search_index.content,
@@ -133,8 +133,9 @@ func (db *DB) Search(query string) ([]SearchResult, error) {
 	FROM web_data
 	INNER JOIN search_index ON web_data.id = search_index.rowid
 	WHERE search_index MATCH ?
-	ORDER BY rank`,
-		query,
+	ORDER BY rank
+	LIMIT 50 OFFSET ?`,
+		query, page*50,
 	)
 	if err != nil {
 		return nil, err

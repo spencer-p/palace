@@ -24,6 +24,15 @@
 				</p>
 				{{ end }}
 			</div>
+			<div id="paginator">
+				{{with .PrevPage}}
+				<a href="{{.}}">prev</a> —
+				{{end}}
+				page {{.PageNum}}
+				{{with .NextPage}}
+				— <a href="{{.}}">next</a>
+				{{end}}
+			</div>
 		</div>
 	</body>
 </html>
