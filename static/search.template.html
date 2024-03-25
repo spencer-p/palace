@@ -20,7 +20,10 @@
 				<p class="result">
 					<h2><a href="{{.URL}}">{{ .SafeTitle }}</a></h2>
 					<p>{{ .SafeBlurb }}</p>
-					<p>visited {{ .ScrapedAt }} — <a href="pages/{{.ID}}">cached</a></p>
+					<p>
+						<span title="{{.ScrapedAt}}">visited {{ .ScrapedAgo }} ago</span>
+						— <a href="pages/{{.ID}}">cached</a>
+					</p>
 				</p>
 				{{ end }}
 			</div>

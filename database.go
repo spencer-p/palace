@@ -24,8 +24,9 @@ type DataColumn struct {
 
 type SearchResult struct {
 	DataColumn
-	ID        int
-	SafeBlurb template.HTML
+	ID         int
+	SafeBlurb  template.HTML
+	ScrapedAgo string
 }
 
 type Database interface {
@@ -56,7 +57,10 @@ func NewDB(filename string) (DB, error) {
 	return DB{db}, nil
 }
 
-const ISO8601 = "2006-01-02 15:04:05.000"
+const (
+	ISO8601   = "2006-01-02 15:04:05.000"
+	ISO8601TZ = "2006-01-02 15:04:05.000-07:00"
+)
 
 func retryBusy(err error) bool {
 	sqliteErr := &sqlite.Error{}
@@ -142,6 +146,7 @@ func (db *DB) Search(query string, page int) ([]SearchResult, error) {
 	}
 	defer rows.Close()
 
+	now := time.Now()
 	var results []SearchResult
 	for rows.Next() {
 		var r SearchResult
@@ -149,11 +154,15 @@ func (db *DB) Search(query string, page int) ([]SearchResult, error) {
 		if err := rows.Scan(&r.ID, &r.URL, &scrapeTime, &r.SafeTitle, &r.SafeContent, &r.SafeBlurb); err != nil {
 			return nil, fmt.Errorf("column %d: scan: %w", len(results), err)
 		}
-		t, err := time.Parse(ISO8601, scrapeTime)
+		t, err := time.Parse(ISO8601TZ, scrapeTime)
 		if err != nil {
-			return nil, fmt.Errorf("column %d: parse scrape time: %w", len(results), err)
+			if t, err = time.Parse(ISO8601, scrapeTime); err != nil {
+				return nil, fmt.Errorf("column %d: parse scrape time: %w", len(results), err)
+			}
 		}
+		t = t.Local()
 		r.ScrapedAt = t
+		r.ScrapedAgo = simpleDuration(now.Sub(t))
 		results = append(results, r)
 	}
 
@@ -161,4 +170,22 @@ func (db *DB) Search(query string, page int) ([]SearchResult, error) {
 		return nil, err
 	}
 	return results, nil
+}
+
+func simpleDuration(d time.Duration) string {
+	const day = 24 * time.Hour
+	switch {
+	case d > 28*day:
+		return fmt.Sprintf("%dm", d/28*day)
+	case d > day:
+		return fmt.Sprintf("%dd", d/day)
+	case d > time.Hour:
+		return fmt.Sprintf("%.0fh", d.Hours())
+	case d > time.Minute:
+		return fmt.Sprintf("%.0fm", d.Minutes())
+	case d > time.Second:
+		return fmt.Sprintf("%.0fm", d.Seconds())
+	default:
+		return "0s"
+	}
 }

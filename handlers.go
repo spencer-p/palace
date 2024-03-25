@@ -105,14 +105,16 @@ func makeSearch() func(w http.ResponseWriter, r *http.Request) {
 		}
 
 		w.WriteHeader(http.StatusOK)
-		searchTemplate.Execute(w, map[string]any{
+		if err := searchTemplate.Execute(w, map[string]any{
 			"PageNum":    page,
 			"NextPage":   withPage(prefix, r.URL, +1),
 			"PrevPage":   withPage(prefix, r.URL, -1),
 			"Query":      query,
 			"NumResults": len(results),
 			"Results":    results,
-		})
+		}); err != nil {
+			log.Errorf("failed to render search: %v", err)
+		}
 	}
 }
 
