@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"html/template"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
-	"text/template"
 	"time"
 
 	"github.com/charmbracelet/log"
