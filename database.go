@@ -73,7 +73,7 @@ func (db *DB) Save(col DataColumn) (int64, error) {
 		var err error
 		res, err = db.Exec(`INSERT INTO web_data(url, scraped_at, title, content) VALUES (?, ?, ?, ?) RETURNING id`,
 			col.URL,
-			col.ScrapedAt.Format(ISO8601),
+			col.ScrapedAt.Format(ISO8601TZ),
 			col.SafeTitle,
 			col.SafeContent,
 		)
@@ -184,7 +184,7 @@ func simpleDuration(d time.Duration) string {
 	case d > time.Minute:
 		return fmt.Sprintf("%.0fm", d.Minutes())
 	case d > time.Second:
-		return fmt.Sprintf("%.0fm", d.Seconds())
+		return fmt.Sprintf("%.0fs", d.Seconds())
 	default:
 		return "0s"
 	}
