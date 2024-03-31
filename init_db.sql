@@ -23,3 +23,11 @@ END;
 CREATE TRIGGER IF NOT EXISTS wd_ad AFTER DELETE ON web_data BEGIN
 	INSERT INTO search_index(search_index, rowid, content, title) VALUES('delete', old.id, old.content, old.title);
 END;
+
+-- https://kerkour.com/sqlite-for-servers
+PRAGMA journal_mode = WAL;
+PRAGMA busy_timeout = 30000; -- 30s.
+PRAGMA synchronous = NORMAL;
+PRAGMA cache_size = 1000000000; -- 1e9 pages.
+PRAGMA foreign_keys = true;
+PRAGMA temp_store = memory;
