@@ -36,6 +36,7 @@ func main() {
 
 	http.Handle("GET /static/", http.FileServer(http.FS(staticContent)))
 
+	log.Infof("Starting server")
 	log.Errorf("listen and serve: %v", http.ListenAndServe(":6844", nil))
 }
 
