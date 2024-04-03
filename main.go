@@ -36,7 +36,7 @@ func main() {
 	authhandle("GET /pages/{id}", notImpl)
 	authhandle("DELETE /pages/{id}", notImpl)
 
-	http.Handle("GET /static/", http.FileServer(http.FS(staticContent)))
+	mux.Handle("GET /static/", http.FileServer(http.FS(staticContent)))
 
 	log.Infof("Starting server")
 	log.Errorf("listen and serve: %v", http.ListenAndServe(":6844", logWrap(mux)))

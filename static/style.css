@@ -4,3 +4,28 @@
 		margin: auto;
 	}
 }
+
+:root {
+	font-family: Arial;
+}
+
+body {
+	background-color: #ddd;
+	color: #222;
+}
+
+a {
+	color: #005d80;
+}
+
+@media (prefers-color-scheme: dark) {
+	body {
+		background-color: #222;
+		color: #ddd;
+	}
+
+	a {
+		color: #8fbc8f;
+	}
+}
+
