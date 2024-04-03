@@ -10,6 +10,7 @@ import (
 
 	"github.com/charmbracelet/log"
 	"github.com/spencer-p/palace/pkg/backoff"
+	"github.com/spencer-p/palace/pkg/prettytime"
 	"modernc.org/sqlite"
 	_ "modernc.org/sqlite"
 	sqlite3 "modernc.org/sqlite/lib"
@@ -162,7 +163,7 @@ func (db *DB) Search(query string, page int) ([]SearchResult, error) {
 		}
 		t = t.Local()
 		r.ScrapedAt = t
-		r.ScrapedAgo = simpleDuration(now.Sub(t))
+		r.ScrapedAgo = prettytime.DurationBetween(now, t)
 		results = append(results, r)
 	}
 
@@ -170,22 +171,4 @@ func (db *DB) Search(query string, page int) ([]SearchResult, error) {
 		return nil, err
 	}
 	return results, nil
-}
-
-func simpleDuration(d time.Duration) string {
-	const day = 24 * time.Hour
-	switch {
-	case d > 28*day:
-		return fmt.Sprintf("%dm", d/28*day)
-	case d > day:
-		return fmt.Sprintf("%dd", d/day)
-	case d > time.Hour:
-		return fmt.Sprintf("%.0fh", d.Hours())
-	case d > time.Minute:
-		return fmt.Sprintf("%.0fm", d.Minutes())
-	case d > time.Second:
-		return fmt.Sprintf("%.0fs", d.Seconds())
-	default:
-		return "0s"
-	}
 }
