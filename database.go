@@ -19,8 +19,8 @@ import (
 type DataColumn struct {
 	ScrapedAt   time.Time
 	URL         string
-	SafeTitle   string
-	SafeContent string
+	SafeTitle   template.HTML
+	SafeContent template.HTML
 }
 
 type SearchResult struct {

@@ -66,8 +66,8 @@ func scrapePage(w http.ResponseWriter, r *http.Request) {
 	col := DataColumn{
 		ScrapedAt:   time.Now(),
 		URL:         minLocation.String(),
-		SafeTitle:   html.EscapeString(content.Title),
-		SafeContent: html.EscapeString(content.TextContent),
+		SafeTitle:   template.HTML(html.EscapeString(content.Title)),
+		SafeContent: template.HTML(html.EscapeString(content.TextContent)),
 	}
 
 	id, err := db.Save(col)
@@ -156,9 +156,8 @@ func makeCachedPage() func(w http.ResponseWriter, r *http.Request) {
 
 		w.WriteHeader(http.StatusOK)
 		if err := cachedTemplate.Execute(w, map[string]any{
-			"Root":          prefix,
-			"Result":        result,
-			"UnsafeContent": html.UnescapeString(result.SafeContent),
+			"Root":   prefix,
+			"Result": result,
 		}); err != nil {
 			log.Errorf("failed to render cached page template: %v", err)
 		}
