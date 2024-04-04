@@ -106,6 +106,7 @@ func makeSearch() func(w http.ResponseWriter, r *http.Request) {
 
 		w.WriteHeader(http.StatusOK)
 		if err := searchTemplate.Execute(w, map[string]any{
+			"Root":       prefix,
 			"PageNum":    page,
 			"NextPage":   withPage(prefix, r.URL, +1),
 			"PrevPage":   withPage(prefix, r.URL, -1),
@@ -134,4 +135,32 @@ func withPage(prefix string, in *url.URL, diff int) string {
 	u.RawQuery = vals.Encode()
 	u.Path = filepath.Join(prefix, u.Path)
 	return u.String()
+}
+
+func makeCachedPage() func(w http.ResponseWriter, r *http.Request) {
+	cachedTemplate := template.Must(template.ParseFS(staticContent, "static/cached.template.html"))
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := strconv.Atoi(r.PathValue("id"))
+		if err != nil {
+			log.Warnf("Invalid cached page id %q: %v", r.PathValue("id"), err)
+			http.Error(w, "Not Found", http.StatusNotFound)
+			return
+		}
+
+		result, err := db.Fetch(int64(id))
+		if err != nil {
+			http.Error(w, "Failed to query database", http.StatusInternalServerError)
+			log.Infof("cached page: failed to query for %d: %v", id, err)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := cachedTemplate.Execute(w, map[string]any{
+			"Root":          prefix,
+			"Result":        result,
+			"UnsafeContent": html.UnescapeString(result.SafeContent),
+		}); err != nil {
+			log.Errorf("failed to render cached page template: %v", err)
+		}
+	}
 }

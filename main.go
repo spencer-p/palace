@@ -33,7 +33,7 @@ func main() {
 
 	mux.HandleFunc("OPTIONS /pages", scrapePageOptions)
 	authhandle("POST /pages", scrapePage)
-	authhandle("GET /pages/{id}", notImpl)
+	authhandle("GET /pages/{id}", makeCachedPage())
 	authhandle("DELETE /pages/{id}", notImpl)
 
 	mux.Handle("GET /static/", http.FileServer(http.FS(staticContent)))

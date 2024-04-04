@@ -29,3 +29,16 @@ a {
 	}
 }
 
+h2.result_title {
+	padding-bottom: 0;
+	margin-bottom: 0;
+}
+
+p.url {
+	padding-top: 0;
+	margin-top: 0;
+}
+
+pre.content {
+	white-space: pre-wrap;
+}

@@ -155,13 +155,10 @@ func (db *DB) Search(query string, page int) ([]SearchResult, error) {
 		if err := rows.Scan(&r.ID, &r.URL, &scrapeTime, &r.SafeTitle, &r.SafeContent, &r.SafeBlurb); err != nil {
 			return nil, fmt.Errorf("column %d: scan: %w", len(results), err)
 		}
-		t, err := time.Parse(ISO8601TZ, scrapeTime)
+		t, err := timeFromDB(scrapeTime)
 		if err != nil {
-			if t, err = time.Parse(ISO8601, scrapeTime); err != nil {
-				return nil, fmt.Errorf("column %d: parse scrape time: %w", len(results), err)
-			}
+			return nil, fmt.Errorf("column %d: %w", len(results), err)
 		}
-		t = t.Local()
 		r.ScrapedAt = t
 		r.ScrapedAgo = prettytime.DurationBetween(now, t)
 		results = append(results, r)
@@ -171,4 +168,47 @@ func (db *DB) Search(query string, page int) ([]SearchResult, error) {
 		return nil, err
 	}
 	return results, nil
+}
+
+func (db *DB) Fetch(id int64) (SearchResult, error) {
+	rows, err := db.Query(`
+	SELECT
+		url, scraped_at, title, content
+	FROM web_data
+	WHERE id = ?`,
+		id,
+	)
+	if err != nil {
+		return SearchResult{}, err
+	}
+	defer rows.Close()
+
+	now := time.Now()
+	rows.Next()
+	var r SearchResult
+	var scrapeTime string
+	if err := rows.Scan(&r.URL, &scrapeTime, &r.SafeTitle, &r.SafeContent); err != nil {
+		return r, fmt.Errorf("scan: %w", err)
+	}
+	t, err := timeFromDB(scrapeTime)
+	if err != nil {
+		return r, err
+	}
+	r.ScrapedAt = t
+	r.ScrapedAgo = prettytime.DurationBetween(now, t)
+
+	if err := rows.Err(); err != nil {
+		return r, err
+	}
+	return r, nil
+}
+
+func timeFromDB(tstring string) (time.Time, error) {
+	t, err := time.Parse(ISO8601TZ, tstring)
+	if err != nil {
+		if t, err = time.Parse(ISO8601, tstring); err != nil {
+			return time.Time{}, fmt.Errorf("parse time %v: %w", tstring, err)
+		}
+	}
+	return t.Local(), nil
 }
