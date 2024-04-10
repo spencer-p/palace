@@ -121,10 +121,11 @@ func (db *DB) Evict(url string) error {
 
 	log.Infof("Dropping %q items below id %d", url, id)
 
-	if err := backoff.Retry(5, retryBusy, func() error {
-		_, err = db.Exec(`DELETE FROM web_data WHERE id < ?`, id)
-		return err
-	}); err != nil {
+	result, deleteErr := db.Exec(`DELETE FROM web_data WHERE url = ? AND id < ?`, url, id)
+	if affected, err := result.RowsAffected(); err != nil {
+		log.Info("Dropped %d rows for %q", affected, url)
+	}
+	if deleteErr != nil {
 		return fmt.Errorf("failed to delete: %v", err)
 	}
 	return nil
