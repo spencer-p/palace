@@ -122,8 +122,8 @@ func (db *DB) Evict(url string) error {
 	log.Infof("Dropping %q items below id %d", url, id)
 
 	result, deleteErr := db.Exec(`DELETE FROM web_data WHERE url = ? AND id < ?`, url, id)
-	if affected, err := result.RowsAffected(); err != nil {
-		log.Info("Dropped %d rows for %q", affected, url)
+	if affected, err := result.RowsAffected(); err == nil {
+		log.Infof("Dropped %d rows for %q", affected, url)
 	}
 	if deleteErr != nil {
 		return fmt.Errorf("failed to delete: %v", err)
