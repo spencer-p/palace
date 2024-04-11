@@ -126,7 +126,7 @@ func (db *DB) Evict(url string) error {
 		log.Infof("Dropped %d rows for %q", affected, url)
 	}
 	if deleteErr != nil {
-		return fmt.Errorf("failed to delete: %v", err)
+		return fmt.Errorf("failed to delete: %v", deleteErr)
 	}
 	return nil
 }
