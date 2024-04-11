@@ -50,7 +50,23 @@ func logWrap(next http.Handler) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		tstart := time.Now()
 		method, path := r.Method, r.URL
-		next.ServeHTTP(w, r)
-		log.Info("Served HTTP", "method", method, "path", path, "useragent", r.Header.Get("User-Agent"), "latency", time.Now().Sub(tstart))
+		intercept := &interceptCode{ResponseWriter: w}
+		next.ServeHTTP(intercept, r)
+		log.Info("Served HTTP",
+			"method", method,
+			"path", path,
+			"useragent", r.Header.Get("User-Agent"),
+			"latency", time.Now().Sub(tstart),
+			"code", intercept.code)
 	})
+}
+
+type interceptCode struct {
+	http.ResponseWriter
+	code int
+}
+
+func (w *interceptCode) WriteHeader(code int) {
+	w.code = code
+	w.ResponseWriter.WriteHeader(code)
 }
