@@ -30,12 +30,6 @@ type SearchResult struct {
 	ScrapedAgo string
 }
 
-type Database interface {
-	Save(DataColumn) (int, error)
-	Fetch(int) (DataColumn, error)
-	Search(string) ([]SearchResult, error)
-}
-
 type DB struct {
 	*sql.DB
 }
@@ -212,4 +206,12 @@ func timeFromDB(tstring string) (time.Time, error) {
 		}
 	}
 	return t.Local(), nil
+}
+
+func (db *DB) Delete(id int64) error {
+	_, err := db.Exec(`DELETE FROM web_data WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete: %v", err)
+	}
+	return nil
 }

@@ -163,3 +163,25 @@ func makeCachedPage() func(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 }
+
+func deletePage(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		log.Warnf("Invalid cached page id %q: %v", r.PathValue("id"), err)
+		http.Error(w, "Not Found", http.StatusNotFound)
+		return
+	}
+
+	err = db.Delete(int64(id))
+	if err != nil {
+		log.Warnf("Failed to delete page id %d: %v", id, err)
+		http.Error(w, fmt.Sprintf("Internal error: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	referTo := r.Header.Get("Referer")
+	if len(referTo) == 0 {
+		referTo = prefix
+	}
+	http.Redirect(w, r, referTo, http.StatusFound)
+}
