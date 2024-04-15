@@ -6,14 +6,21 @@ const banlist = [
 ];
 
 const regexBanlist = new RegExp("("+banlist.join("|")+")");
+const referrerBanlist = new RegExp("https://icebox.spencerjp.dev/");
 
 async function uploadContent() {
 	const opts = await chrome.storage.local.get("palace");
 	const url = document.URL;
 	if (regexBanlist.test(url)) {
-		console.log("palace: will not scraped banned url:", url);
+		console.log("palace: will not scrape banned url:", url);
 		return;
 	}
+
+	if (referrerBanlist.test(document.referrer)) {
+		console.log("palace: will not scrape because of referrer:", document.referrer);
+		return;
+	}
+
 	fetch("https://icebox.spencerjp.dev/palace/pages", {
 		method: "POST",
 		mode: "no-cors",
