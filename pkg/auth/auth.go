@@ -154,7 +154,10 @@ func OnlyAuthenticated(db UsersDB, next http.Handler) http.Handler {
 			}
 		}
 
-		// TODO: Refresh the token before calling the inner handler?
+		// Refresh the auth token before calling the inner handler.
+		if err := refreshToken(w, r); err != nil {
+			log.Warnf("Failed to refresh auth token: %v", err)
+		}
 
 		// Allow the request.
 		next.ServeHTTP(w, r)
@@ -253,4 +256,22 @@ func MustDecodeBase64(in []byte) []byte {
 		panic(err)
 	}
 	return output
+}
+
+func refreshToken(w http.ResponseWriter, r *http.Request) error {
+	session, err := store.Get(r, sessionName)
+	if err != nil {
+		return err
+	}
+	token, ok := session.Values["token"].(authToken)
+	if !ok {
+		return fmt.Errorf("no authentication")
+	}
+
+	token.CreationTimestamp = time.Now()
+	session.Values["token"] = token
+	if err := session.Save(r, w); err != nil {
+		return fmt.Errorf("save refreshed token: %w", err)
+	}
+	return nil
 }
