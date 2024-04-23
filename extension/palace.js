@@ -2,7 +2,8 @@ const banlist = [
 	"https://icebox.spencerjp.dev/palace.*",
 	"https://(www.)?google.com.*",
 	"https://(www.)?youtube.com.*",
-	"https://xkcd.com.*"
+	"https://xkcd.com.*",
+	"(http://)?localhost:.*"
 ];
 
 const regexBanlist = new RegExp("("+banlist.join("|")+")");
