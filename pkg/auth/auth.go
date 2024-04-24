@@ -259,6 +259,12 @@ func MustDecodeBase64(in []byte) []byte {
 }
 
 func refreshToken(w http.ResponseWriter, r *http.Request) error {
+	if r.Method != "GET" {
+		// We don't want to attempt to refresh the extension/javascript,
+		// just the user browsing. We can proxy that by filtering just GET
+		// requests.
+		return nil
+	}
 	session, err := store.Get(r, sessionName)
 	if err != nil {
 		return err
