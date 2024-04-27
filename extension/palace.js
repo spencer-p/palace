@@ -9,6 +9,36 @@ const banlist = [
 const regexBanlist = new RegExp("("+banlist.join("|")+")");
 const referrerBanlist = new RegExp("https://icebox.spencerjp.dev/");
 
+// findMainContentOr tries to find a selector for the main content of the page
+// by searching for a "Skip to content" link that links to an element with
+// non-empty content. If not found, the defaultSelector is returned.
+function findMainContentOr(defaultSelector) {
+	let walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
+
+	const skipToMainContent = /^skip to (main )?content$/i;
+	const containsSkip = /skip to (main )?content/i; // Note no ^, $.
+	const anchor = /^#.*/;
+
+	let node = walker.nextNode();
+	while (node) {
+		let href = node.getAttribute("href");
+		if (skipToMainContent.test(node.innerText) &&
+			anchor.test(href) &&
+			document.querySelector(href).innerText != "") {
+			return href;
+		}
+
+		// If the skip button is in the current inner text, descend naturally.
+		// If not, move to the next sibling.
+		if (containsSkip.test(node.innerText)) {
+			node = walker.nextNode();
+		} else {
+			node = walker.nextSibling();
+		}
+	}
+	return defaultSelector;
+}
+
 async function uploadContent() {
 	const opts = await chrome.storage.local.get("palace");
 	const url = document.URL;
@@ -22,6 +52,9 @@ async function uploadContent() {
 		return;
 	}
 
+	let selector = findMainContentOr("body");
+	console.log("palace: scraping text of", selector)
+
 	fetch("https://icebox.spencerjp.dev/palace/pages", {
 		method: "POST",
 		mode: "no-cors",
@@ -31,7 +64,7 @@ async function uploadContent() {
 		body: JSON.stringify({
 			"url": url,
 			"title": document.title,
-			"text": document.querySelector("body").innerText,
+			"text": document.querySelector(selector).innerText,
 			"token": opts.palace.token,
 		}),
 	})
