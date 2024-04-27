@@ -44,7 +44,7 @@ func scrapePage(w http.ResponseWriter, r *http.Request) {
 	if content.URL == "" || content.Title == "" || content.TextContent == "" {
 		http.Error(w, "Incomplete request", http.StatusBadRequest)
 		log.Infof("POST /pages: Incomplete request. URL=%t, title=%t, content=%t",
-			content.URL == "", content.Title == "", content.TextContent == "")
+			content.URL != "", content.Title != "", content.TextContent != "")
 		return
 	}
 
