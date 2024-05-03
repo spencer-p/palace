@@ -15,8 +15,8 @@ const referrerBanlist = new RegExp("https://icebox.spencerjp.dev/");
 function findMainContentOr(defaultSelector) {
 	let walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
 
-	const skipToMainContent = /^skip to (main )?content$/i;
-	const containsSkip = /skip to (main )?content/i; // Note no ^, $.
+	const skipToMainContent = /^(skip|jump) to (main )?content$/i;
+	const containsSkip = /(skip|jump) to (main )?content/i; // Note no ^, $.
 	const anchor = /^#.*/;
 
 	let node = walker.nextNode();
