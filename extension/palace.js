@@ -70,7 +70,7 @@ async function uploadContent() {
 		}),
 	})
 		.then((response) => response.text())
-		.then((data) => console.log("palace response:", data))
+		.then((_) => console.log("palace response: ok"))
 		.catch((err) => console.error("palace error:", err));
 }
 
