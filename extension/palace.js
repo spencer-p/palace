@@ -24,6 +24,7 @@ function findMainContentOr(defaultSelector) {
 		let href = node.getAttribute("href");
 		if (skipToMainContent.test(node.innerText) &&
 			anchor.test(href) &&
+			document.querySelector(href) &&
 			document.querySelector(href).innerText != "") {
 			return href;
 		}
