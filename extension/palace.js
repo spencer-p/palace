@@ -58,7 +58,8 @@ async function uploadContent() {
 
 	fetch("https://icebox.spencerjp.dev/palace/pages", {
 		method: "POST",
-		mode: "no-cors",
+		mode: "cors",
+		credentials: "include",
 		headers: {
 			"Content-Type": "application/json",
 		},
@@ -69,8 +70,8 @@ async function uploadContent() {
 			"token": opts.palace.token,
 		}),
 	})
-		.then((response) => response.text())
-		.then((_) => console.log("palace response: ok"))
+		.then((response) => response.json())
+		.then((json) => console.log("palace response:", json))
 		.catch((err) => console.error("palace error:", err));
 }
 

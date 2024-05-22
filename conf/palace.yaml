@@ -52,6 +52,11 @@ spec:
             secretKeyRef:
               name: palace-auth
               key: AUTH_HASH_KEY
+        - name: AUTH_API_KEYS
+          valueFrom:
+            secretKeyRef:
+              name: palace-auth
+              key: AUTH_API_KEYS
         - name: MY_PASSWORD
           valueFrom:
             secretKeyRef:

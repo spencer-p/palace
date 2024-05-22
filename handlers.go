@@ -28,12 +28,22 @@ type PostPageRequest struct {
 
 // See https://web.dev/articles/cross-origin-resource-sharing?utm_source=devtools#preflight-requests.
 func scrapePageOptions(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "https://icebox.spencerjp.dev")
-	w.Header().Set("Access-Control-Allow-Methods", "POST")
+	w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+	w.Header().Set("Access-Control-Allow-Methods", r.Header.Get("Access-Control-Request-Method"))
+	w.Header().Set("Access-Control-Allow-Headers", r.Header.Get("Access-Control-Request-Headers"))
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+	// Because we are making up answers based on the request, the client should
+	// never ever cache our response.
+	w.Header().Set("Access-Control-Max-Age", "0")
+
 	w.WriteHeader(http.StatusOK)
 }
 
 func scrapePage(w http.ResponseWriter, r *http.Request) {
+	// Allow our response to be read by the extension at the calling site.
+	w.Header().Set("Access-Control-Allow-Origin", r.Header.Get("Origin"))
+	w.Header().Set("Access-Control-Allow-Credentials", "true")
+
 	defer r.Body.Close()
 	var content PostPageRequest
 	if err := json.NewDecoder(r.Body).Decode(&content); err != nil {
@@ -72,7 +82,9 @@ func scrapePage(w http.ResponseWriter, r *http.Request) {
 
 	id, err := db.Save(col)
 	if err != nil {
-		http.Error(w, "Failed to commit data", http.StatusInternalServerError)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"ok":false,"err":%q}`, err)
 		log.Infof("POST /pages: Failed to %q save in DB: %v", col.URL, err)
 		return
 	}
@@ -81,7 +93,7 @@ func scrapePage(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, `{"id":%d}`, id) // Now that's fast JSON.
+	fmt.Fprintf(w, `{"ok":true,"id":%d}`, id) // Now that's fast JSON.
 }
 
 func makeSearch() func(w http.ResponseWriter, r *http.Request) {

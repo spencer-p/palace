@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -23,9 +24,10 @@ import (
 )
 
 var (
-	store  *sessions.CookieStore
-	salt   []byte
-	prefix = os.Getenv("PATH_PREFIX")
+	store   *sessions.CookieStore
+	salt    []byte
+	apiKeys []string
+	prefix  = os.Getenv("PATH_PREFIX")
 )
 
 const (
@@ -78,6 +80,10 @@ func setupCookiesOrDie() {
 		HttpOnly: false, // Allows JavaScript to read the cookie.
 	}
 	store.MaxAge(maxAge)
+
+	for _, token := range strings.Split(os.Getenv("AUTH_API_KEYS"), ",") {
+		apiKeys = append(apiKeys, token)
+	}
 }
 
 func checkToken(db UsersDB, token authToken) error {
@@ -115,6 +121,12 @@ func checkAuthJSON(db UsersDB, r *http.Request) error {
 		return fmt.Errorf("no JSON token: %v", err)
 	}
 
+	// Allow apiKeys.
+	if slices.Contains(apiKeys, packet.Token) {
+		return nil
+	}
+
+	// TODO: The remainder can be removed when all clients are using an api key.
 	values := make(map[any]any)
 	err := securecookie.DecodeMulti(sessionName, packet.Token, &values, store.Codecs...)
 	if err != nil {
@@ -149,6 +161,7 @@ func OnlyAuthenticated(db UsersDB, next http.Handler) http.Handler {
 
 			if jsonErr := checkAuthJSON(db, rc); jsonErr != nil {
 				log.Infof("No JSON auth: %v", jsonErr)
+				log.Infof("No cookie auth: %v", authErr)
 				noAuth(w, rc, authErr)
 				return
 			}

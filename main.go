@@ -42,7 +42,7 @@ func main() {
 	log.Errorf("listen and serve: %v", http.ListenAndServe(":6844", logWrap(mux)))
 }
 
-func notImpl(w http.ResponseWriter, r *http.Request) {
+func notImpl(w http.ResponseWriter, _ *http.Request) {
 	http.Error(w, "Not Implemented", http.StatusNotImplemented)
 }
 
