@@ -18,10 +18,14 @@
 			<div id="results">
 				{{ range .Results }}
 				<p class="result">
-					<span title="{{.ScrapedAgo}}">{{.ScrapedAt}}</span>
-					<a href="{{.URL}}">{{.URL}}</a>
-					— <a href="pages/{{.ID}}">cached</a>
-					• <a href="pages/{{.ID}}/delete">delete</a>
+					<p>
+						<h2><a href="{{.URL}}">{{.SafeTitle}}</a></h2>
+					</p>
+					<p>
+						<span title="{{.ScrapedAgo}}">{{.ScrapedAt}}</span>
+						— <a href="pages/{{.ID}}">cached</a>
+						• <a href="pages/{{.ID}}/delete">delete</a>
+					</p>
 				</p>
 				{{ end }}
 			</div>
