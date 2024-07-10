@@ -197,3 +197,34 @@ func deletePage(w http.ResponseWriter, r *http.Request) {
 	}
 	http.Redirect(w, r, referTo, http.StatusFound)
 }
+
+func makeHistory() func(w http.ResponseWriter, r *http.Request) {
+	searchTemplate := template.Must(template.ParseFS(staticContent, "static/history.template.html"))
+	return func(w http.ResponseWriter, r *http.Request) {
+		page := 0
+		if parsed, err := strconv.Atoi(r.FormValue("page")); err == nil {
+			page = parsed
+		}
+
+		var results []SearchResult
+		var err error
+		results, err = db.History(page)
+		if err != nil {
+			http.Error(w, "Failed to query database", http.StatusInternalServerError)
+			log.Infof("search: failed to query for history: %v", err)
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+		if err := searchTemplate.Execute(w, map[string]any{
+			"Root":       prefix,
+			"PageNum":    page,
+			"NextPage":   withPage(prefix, r.URL, +1),
+			"PrevPage":   withPage(prefix, r.URL, -1),
+			"NumResults": len(results),
+			"Results":    results,
+		}); err != nil {
+			log.Errorf("failed to render history: %v", err)
+		}
+	}
+}

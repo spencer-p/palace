@@ -215,3 +215,40 @@ func (db *DB) Delete(id int64) error {
 	}
 	return nil
 }
+
+func (db *DB) History(page int) ([]SearchResult, error) {
+	rows, err := db.Query(`
+	SELECT
+		id, url, scraped_at, title, content
+	FROM web_data
+	ORDER BY id DESC
+	LIMIT 50 OFFSET ?`,
+		page*50,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	now := time.Now()
+	var results []SearchResult
+	for rows.Next() {
+		var r SearchResult
+		var scrapeTime string
+		if err := rows.Scan(&r.ID, &r.URL, &scrapeTime, &r.SafeTitle, &r.SafeContent); err != nil {
+			return nil, fmt.Errorf("column %d: scan: %w", len(results), err)
+		}
+		t, err := timeFromDB(scrapeTime)
+		if err != nil {
+			return nil, fmt.Errorf("column %d: %w", len(results), err)
+		}
+		r.ScrapedAt = t
+		r.ScrapedAgo = prettytime.DurationBetween(now, t)
+		results = append(results, r)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return results, nil
+}

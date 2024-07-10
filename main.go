@@ -30,6 +30,7 @@ func main() {
 
 	mux.Handle("/{$}", http.RedirectHandler(filepath.Join(os.Getenv("PATH_PREFIX"), "/search"), http.StatusFound))
 	authhandle("/search", makeSearch())
+	authhandle("/history", makeHistory())
 
 	mux.HandleFunc("OPTIONS /pages", scrapePageOptions)
 	authhandle("POST /pages", scrapePage)

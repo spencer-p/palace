@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Palace History</title>
+		<link rel="stylesheet" href="{{.Root}}/static/style.css" />
+	</head>
+	<body>
+		<div class="content">
+			<h1>Palace</h1>
+			<form method="get" action="{{.Root}}/search">
+				<input type="text" name="q" value="{{.Query}}"
+				placeholder="search history">
+				<button type="submit">search</button>
+			</form>
+			<div id="results">
+				{{ range .Results }}
+				<p class="result">
+					<span title="{{.ScrapedAgo}}">{{.ScrapedAt}}</span>
+					<a href="{{.URL}}">{{.URL}}</a>
+					— <a href="pages/{{.ID}}">cached</a>
+					• <a href="pages/{{.ID}}/delete">delete</a>
+				</p>
+				{{ end }}
+			</div>
+			<div id="paginator">
+				{{with .PrevPage}}
+				<a href="{{.}}">prev</a> —
+				{{end}}
+				page {{.PageNum}}
+				{{with .NextPage}}
+				— <a href="{{.}}">next</a>
+				{{end}}
+			</div>
+		</div>
+	</body>
+</html>
+
