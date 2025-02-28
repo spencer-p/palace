@@ -3,7 +3,9 @@ const banlist = [
 	"https://(www.)?google.com.*",
 	"https://(www.)?youtube.com.*",
 	"https://xkcd.com.*",
-	"(http://)?localhost:.*"
+	"(http://)?localhost:.*",
+	"https://old.reddit.com/(\\?count=\\d+&after=[-_a-z1-9]+)?$"
+	"https://www.reddit.com/media.*"
 ];
 
 const regexBanlist = new RegExp("("+banlist.join("|")+")");
