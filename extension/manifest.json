@@ -4,7 +4,7 @@
   "manifest_version": 3,
   "description": "TODO",
   "host_permissions": ["*://icebox.spencerjp.dev/"],
-  "permissions": ["cookies", "storage", "scripting", "activeTab"],
+  "permissions": ["cookies", "storage", "scripting", "activeTab", "alarms"],
   "content_scripts": [
     {
       "matches": ["https://*/*", "http://*/*"],
@@ -12,7 +12,10 @@
     }
   ],
   "action": {
-	  "default_popup": "pop.html"
+         "default_popup": "pop.html"
+  },
+  "background": {
+    "service_worker": "background.js"
   }
 }
 
