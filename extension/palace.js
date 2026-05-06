@@ -4,7 +4,7 @@ const banlist = [
 	"https://(www.)?youtube.com.*",
 	"https://xkcd.com.*",
 	"(http://)?localhost:.*",
-	"https://old.reddit.com/(\\?count=\\d+&after=[-_a-z1-9]+)?$"
+	"https://old.reddit.com/(\\?count=\\d+&after=[-_a-z1-9]+)?$",
 	"https://www.reddit.com/media.*"
 ];
 
