@@ -179,6 +179,16 @@ func OnlyAuthenticated(db UsersDB, next http.Handler) http.Handler {
 
 func noAuth(w http.ResponseWriter, r *http.Request, authErr error) {
 	log.Errorf("%s %s: failed to auth user: %v", r.Method, r.URL.Path, authErr)
+
+	// Check if this is an API request with JSON content type.
+	if r.Header.Get("Content-Type") == "application/json" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusUnauthorized) // 401 Unauthorized
+		json.NewEncoder(w).Encode(map[string]string{"error": "Unauthorized", "reason": authErr.Error()})
+		return
+	}
+
+	// Handle redirect for human-facing requests (e.g., GET /pages).
 	session, err := store.Get(r, sessionName)
 	if err == nil {
 		session.AddFlash(fmt.Sprintf("Logged out: %v", authErr))
